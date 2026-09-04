@@ -1,0 +1,158 @@
+import type { IssueStage } from './constants';
+
+/** A test case as the UI consumes it — dates are ISO strings, not Date objects. */
+export interface TestCaseDTO {
+  id: string;
+  testCaseId: string;
+  sheetTab: string;
+  rowNumber: number;
+  area: string;
+  module: string | null;
+  scenario: string;
+  type: string | null;
+  priority: string | null;
+  platform: string | null;
+  preconditions: string | null;
+  testData: string | null;
+  steps: string | null;
+  expected: string | null;
+  actual: string | null;
+  status: string;
+  defectId: string | null;
+  tester: string | null;
+  executedAt: string | null;
+  comments: string | null;
+  sourceLabel: string | null;
+  whyManual: string | null;
+  execution: 'Manual' | 'Automated';
+}
+
+export interface IssueDTO {
+  id: string;
+  number: number;
+  repo: string;
+  title: string;
+  url: string | null;
+  testCaseIds: string[];
+  module: string | null;
+  area: string | null;
+  severity: string;
+  labels: string[];
+  stage: IssueStage;
+  reporter: string | null;
+  assignee: string | null;
+  createdAt: string;
+  closedAt: string | null;
+  closedBy: string | null;
+  resolution: string | null;
+  retestAt: string | null;
+  retestBy: string | null;
+  retestResult: string | null;
+  retestNote: string | null;
+  confirmedAt: string | null;
+  confirmedBy: string | null;
+  confirmNote: string | null;
+  reopened: number;
+  ghState: string | null;
+}
+
+export interface ModuleHealth {
+  key: string;
+  module: string;
+  area: string;
+  total: number;
+  inScope: number;
+  executed: number;
+  executionPct: number;
+  counts: Record<string, number>;
+  pass: number;
+  fail: number;
+  blocked: number;
+  retest: number;
+  risk: number;
+}
+
+export interface CoverageRow {
+  label: string;
+  total: number;
+  executed: number;
+}
+
+export interface QaSummary {
+  total: number;
+  totalWithAutomated: number;
+  automatedCount: number;
+  inScope: number;
+  counts: Record<string, number>;
+  pass: number;
+  fail: number;
+  blocked: number;
+  retest: number;
+  notRun: number;
+  notApplicable: number;
+  executed: number;
+  remaining: number;
+  executionPct: number;
+  passPct: number;
+  failurePct: number;
+  automationPct: number;
+  openRisk: number;
+  healthScore: number;
+  healthBand: string;
+  modules: ModuleHealth[];
+  coverageByType: CoverageRow[];
+  coverageByPriority: CoverageRow[];
+  coverageByPlatform: CoverageRow[];
+  coverageByArea: CoverageRow[];
+  attention: TestCaseDTO[];
+  recent: TestCaseDTO[];
+  executionDates: string[];
+  issuePipeline: IssuePipeline;
+  sync: SyncState;
+}
+
+export interface IssuePipeline {
+  created: number;
+  resolved: number;
+  retested: number;
+  retestPassed: number;
+  retestFailed: number;
+  confirmed: number;
+  reopened: number;
+  open: number;
+  inProgress: number;
+  awaitingRetest: number;
+  awaitingSignOff: number;
+}
+
+export interface SyncState {
+  lastSyncedAt: string | null;
+  state: 'ok' | 'stale' | 'error' | 'never';
+  trigger: string | null;
+  status: string | null;
+  warnings: SyncWarning[];
+  error: string | null;
+  source: 'sheet' | 'seed';
+  counts: { created: number; updated: number; unchanged: number; softDeleted: number };
+}
+
+export interface SyncWarning {
+  rule: string;
+  tab: string;
+  row: number;
+  testCaseId: string | null;
+  message: string;
+}
+
+export interface TrendPoint {
+  date: string;
+  passed: number;
+  failed: number;
+  blocked: number;
+  executed: number;
+  inScope: number;
+  passPct: number;
+  executionPct: number;
+  healthScore: number;
+  openIssues: number;
+}
