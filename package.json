@@ -2,21 +2,15 @@
   "name": "qamate",
   "version": "1.0.0",
   "private": true,
-  "description": "Oraxs QA Console \u2014 client-facing QA test case dashboard driven from a Google Sheet",
+  "description": "Oraxs QA Console — client-facing QA test case dashboard driven from a Google Sheet",
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "db:push": "prisma db push",
-    "db:studio": "prisma studio",
-    "seed": "tsx scripts/seed.ts",
-    "sync": "tsx scripts/sync-once.ts",
-    "setup": "prisma generate && prisma db push && npm run seed",
     "check:sheet": "tsx scripts/check-sheet.ts"
   },
   "dependencies": {
-    "@prisma/client": "^5.22.0",
     "google-auth-library": "^9.15.0",
     "googleapis": "^144.0.0",
     "next": "^14.2.18",
@@ -27,7 +21,6 @@
     "@types/node": "^22.10.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
-    "prisma": "^5.22.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   },

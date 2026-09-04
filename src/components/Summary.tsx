@@ -294,87 +294,6 @@ export function AutomationSplit({ s }: { s: QaSummary }) {
   );
 }
 
-/** Trends need two snapshots. Until then, say why — don't draw a fake line. */
-export function TrendPanel({ points, firstDate }: { points: { date: string; passPct: number; executionPct: number }[]; firstDate: string | null }) {
-  if (points.length < 2) {
-    return (
-      <Panel title="Pass-rate trend" hint="Requires 2+ sync snapshots">
-        <EmptyState
-          title="Trend starts after the second snapshot"
-          icon={
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M3 17l5-6 4 3.5L21 6"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <circle cx="21" cy="6" r="1.6" fill="currentColor" />
-            </svg>
-          }
-          body={
-            <>
-              The sync job stores one snapshot per day.
-              {firstDate ? ` Executed results in the sheet carry ${firstDate} as their execution date.` : ''} Pass-rate,
-              failure and defect trends plot from the next run onward.
-            </>
-          }
-        />
-      </Panel>
-    );
-  }
-
-  // One y-axis, always. Two measures of different scale would need two charts.
-  const W = 640;
-  const H = 160;
-  const pad = { l: 34, r: 12, t: 12, b: 22 };
-  const xs = (i: number) => pad.l + (i / (points.length - 1)) * (W - pad.l - pad.r);
-  const ys = (v: number) => pad.t + (1 - v / 100) * (H - pad.t - pad.b);
-  const line = (key: 'passPct' | 'executionPct') =>
-    points.map((p, i) => `${i ? 'L' : 'M'}${xs(i).toFixed(1)},${ys(p[key]).toFixed(1)}`).join(' ');
-
-  return (
-    <Panel title="Pass-rate trend" hint={`${points.length} snapshots`}>
-      <div className="clegend">
-        <span className="lg">
-          <i className="sw" style={{ background: 'var(--pass)' }} />
-          Pass rate
-        </span>
-        <span className="lg">
-          <i className="sw" style={{ background: 'var(--accent)' }} />
-          Execution
-        </span>
-      </div>
-      <div className="chart">
-        <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} role="img" aria-label="Pass rate and execution over time">
-          {[0, 25, 50, 75, 100].map((g) => (
-            <g key={g}>
-              <line x1={pad.l} x2={W - pad.r} y1={ys(g)} y2={ys(g)} stroke="var(--line)" strokeWidth="1" />
-              <text x={4} y={ys(g) + 3.5} fontSize="9" fill="var(--ink-3)" fontFamily="var(--f-mono)">
-                {g}%
-              </text>
-            </g>
-          ))}
-          <path d={line('executionPct')} fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinejoin="round" />
-          <path d={line('passPct')} fill="none" stroke="var(--pass)" strokeWidth="2" strokeLinejoin="round" />
-          {points.map((p, i) => (
-            <circle key={p.date} cx={xs(i)} cy={ys(p.passPct)} r="3" fill="var(--pass)" stroke="var(--surface)" strokeWidth="2">
-              <title>{`${p.date} — pass ${f1(p.passPct)}%, execution ${f1(p.executionPct)}%`}</title>
-            </circle>
-          ))}
-          <text x={pad.l} y={H - 5} fontSize="9" fill="var(--ink-3)" fontFamily="var(--f-mono)">
-            {points[0].date}
-          </text>
-          <text x={W - pad.r} y={H - 5} fontSize="9" fill="var(--ink-3)" textAnchor="end" fontFamily="var(--f-mono)">
-            {points[points.length - 1].date}
-          </text>
-        </svg>
-      </div>
-    </Panel>
-  );
-}
-
 export function RecentTable({ cases }: { cases: TestCaseDTO[] }) {
   const [selected, setSelected] = useState<TestCaseDTO | null>(null);
   return (
@@ -439,7 +358,7 @@ export function IssuePipelineStrip({
   const steps = [
     {
       n: 'STEP 01',
-      t: 'Issue created in GitHub',
+      t: 'Issue created',
       v: p.created,
       d: 'from failed & blocked test cases',
       done: p.created,
@@ -447,7 +366,7 @@ export function IssuePipelineStrip({
     },
     {
       n: 'STEP 02',
-      t: 'Closed / resolved in GitHub',
+      t: 'Closed / resolved',
       v: p.resolved,
       d: `${p.created - p.resolved} still being fixed`,
       done: p.resolved,
@@ -480,7 +399,7 @@ export function IssuePipelineStrip({
             View all issues →
           </button>
         ) : (
-          'Failed case → GitHub issue → fix merged → QA retest → senior sign-off'
+          'Failed case → issue logged → fix merged → QA retest → senior sign-off'
         )
       }
       style={{ marginBottom: 18 }}

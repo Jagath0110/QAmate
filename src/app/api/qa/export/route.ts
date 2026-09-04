@@ -1,6 +1,5 @@
 import { type NextRequest } from 'next/server';
-import { prisma } from '@/lib/db';
-import { toDTO } from '@/lib/metrics';
+import { getCases } from '@/lib/metrics';
 import { csvCell } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
@@ -32,7 +31,7 @@ const HEADERS: [string, string][] = [
  *  current filters so the export matches what they were looking at. */
 export async function GET(req: NextRequest) {
   const p = req.nextUrl.searchParams;
-  const rows = (await prisma.testCase.findMany({ where: { deletedAt: null } })).map(toDTO);
+  const rows = await getCases();
   const q = (p.get('q') ?? '').trim().toLowerCase();
   const eq = (key: string, val: string | null | undefined) => !key || key === val;
 

@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { prisma } from '@/lib/db';
-import { toDTO } from '@/lib/metrics';
+import { getCases } from '@/lib/metrics';
 import { PRIORITY_ORDER, STATUS_ORDER } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +14,7 @@ export async function GET(req: NextRequest) {
   const page = Math.max(1, Number(p.get('page') ?? 1));
   const pageSize = Math.min(500, Math.max(1, Number(p.get('pageSize') ?? 100)));
 
-  const rows = (await prisma.testCase.findMany({ where: { deletedAt: null } })).map(toDTO);
+  const rows = await getCases();
 
   const q = (p.get('q') ?? '').trim().toLowerCase();
   const eq = (key: string, val: string | null | undefined) => !key || key === val;

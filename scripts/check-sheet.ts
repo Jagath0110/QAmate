@@ -8,7 +8,14 @@
  */
 import { google } from 'googleapis';
 import { JWT } from 'google-auth-library';
-import { AUTOMATED_TAB, CASE_HEADERS, CASE_TABS, LISTS_TAB } from '../src/lib/constants';
+import {
+  AUTOMATED_TAB,
+  CASE_HEADERS,
+  CASE_TABS,
+  ISSUE_HEADERS,
+  ISSUES_TAB,
+  LISTS_TAB,
+} from '../src/lib/constants';
 
 const ok = (m: string) => console.log(`  ✓ ${m}`);
 const bad = (m: string) => console.log(`  ✕ ${m}`);
@@ -95,7 +102,7 @@ async function main() {
   }
 
   console.log('\n5. Required tabs');
-  for (const t of [...CASE_TABS, AUTOMATED_TAB, LISTS_TAB]) {
+  for (const t of [...CASE_TABS, AUTOMATED_TAB, LISTS_TAB, ISSUES_TAB]) {
     if (tabNames.includes(t)) ok(t);
     else {
       bad(`Missing tab: "${t}"`);
@@ -103,7 +110,7 @@ async function main() {
     }
   }
   const extra = tabNames.filter(
-    (t) => ![...CASE_TABS, AUTOMATED_TAB, LISTS_TAB, 'README'].includes(t)
+    (t) => ![...CASE_TABS, AUTOMATED_TAB, LISTS_TAB, ISSUES_TAB, 'README'].includes(t)
   );
   if (extra.length) warn(`Extra tabs (ignored by the sync): ${extra.join(', ')}`);
 
@@ -124,6 +131,22 @@ async function main() {
     }
   });
 
+  if (tabNames.includes(ISSUES_TAB)) {
+    console.log('\n6b. Header row of the Issues tab');
+    const issuesRes = await sheets.spreadsheets.values.get({
+      spreadsheetId: sheetId!,
+      range: `'${ISSUES_TAB}'!A1:S1`,
+    });
+    const header = ((issuesRes.data.values?.[0] ?? []) as unknown[]).map((h) => String(h ?? '').trim());
+    const missing = ISSUE_HEADERS.filter((h) => !header.includes(h));
+    if (missing.length) {
+      bad(`${ISSUES_TAB} — missing column(s): ${missing.join(', ')}`);
+      failed = true;
+    } else {
+      ok(`${ISSUES_TAB} — all ${ISSUE_HEADERS.length} columns present`);
+    }
+  }
+
   console.log('\n7. Row counts');
   const counts = await sheets.spreadsheets.values.batchGet({
     spreadsheetId: sheetId!,
@@ -143,7 +166,7 @@ async function main() {
   console.log(
     failed
       ? '\n✕ Connection works but the sheet structure has problems. Fix the ✕ items above.\n'
-      : '\n✓ Everything checks out. Run: npm run sync\n'
+      : '\n✓ Everything checks out. The app reads this sheet live — just reload it, or hit POST /api/sync/run to refresh sooner.\n'
   );
   process.exit(failed ? 1 : 0);
 }

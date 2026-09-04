@@ -50,7 +50,7 @@ export function StageTracker({ issue }: { issue: IssueDTO }) {
       <div className="track4">
         <Node on label="Issue created" />
         <span className={`l${s2 ? ' on' : ''}`} />
-        <Node on={s2} label="Resolved in GitHub" />
+        <Node on={s2} label="Resolved" />
         <span className={`l${s3 && !bad ? ' on' : ''}`} />
         <Node on={s3 && !bad} isBad={bad} label="Retested by QA" />
         <span className={`l${s4 ? ' on' : ''}`} />
@@ -78,12 +78,10 @@ export function IssueBoard({
   issues,
   cases,
   pipeline,
-  isSeeded,
 }: {
   issues: IssueDTO[];
   cases: TestCaseDTO[];
   pipeline: IssuePipeline;
-  isSeeded: boolean;
 }) {
   const [f, setF] = useState({ ...EMPTY });
   const [sortKey, setSortKey] = useState<ColKey>('number');
@@ -208,8 +206,8 @@ export function IssueBoard({
     return (
       <Panel title="Issues">
         <EmptyState
-          title="No defect IDs recorded yet"
-          body="This tab fills as soon as QA writes a GitHub issue number into the Defect ID column of a failed test case. Add GITHUB_TOKEN and GITHUB_REPO to .env to pull live issue state."
+          title="No issues recorded yet"
+          body="This tab fills as soon as QA adds a row to the Issues tab in the sheet and writes its Issue ID into a failed test case's Defect ID column."
         />
       </Panel>
     );
@@ -217,21 +215,6 @@ export function IssueBoard({
 
   return (
     <>
-      {isSeeded ? (
-        <div className="banner warn">
-          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.5" />
-            <path d="M8 4.6v4M8 11.2h.01" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-          </svg>
-          <span>
-            <b>Illustrative data.</b> No GitHub token is configured and the sheet&apos;s Defect ID column is
-            empty, so these {issues.length} issues are a worked example of the lifecycle, linked to real test
-            case IDs. Set <code>GITHUB_TOKEN</code> and <code>GITHUB_REPO</code> in <code>.env</code> and
-            record issue numbers in the Defect ID column to pull live data.
-          </span>
-        </div>
-      ) : null}
-
       <div className="panel kpis">
         {kpis.map(([k, v, d, tone]) => (
           <div className="kpi" key={k}>

@@ -1,19 +1,15 @@
 import { AppShell } from '@/components/AppShell';
-import { prisma, isDatabaseReady } from '@/lib/db';
-import { getSyncState } from '@/lib/sync';
-import { SetupNotice } from '@/components/SetupNotice';
+import { getWorkbook, getSyncState } from '@/lib/workbook';
+import { SheetNotConnected } from '@/components/SheetNotConnected';
 
 export const dynamic = 'force-dynamic';
 
 export default async function QaLayout({ children }: { children: React.ReactNode }) {
-  const ready = await isDatabaseReady();
-  if (!ready) return <SetupNotice />;
+  const [wb, sync] = await Promise.all([getWorkbook(), getSyncState()]);
+  if (!wb.loaded) return <SheetNotConnected error={wb.error} />;
 
-  const [caseCount, issueCount, sync] = await Promise.all([
-    prisma.testCase.count({ where: { deletedAt: null } }),
-    prisma.issue.count(),
-    getSyncState(),
-  ]);
+  const caseCount = wb.cases.length;
+  const issueCount = wb.issues.length;
 
   return (
     <AppShell sync={sync} caseCount={caseCount} issueCount={issueCount}>

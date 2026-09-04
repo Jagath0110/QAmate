@@ -1,11 +1,11 @@
-import { prisma } from './db';
-import { getSyncState } from './sync';
+import { getWorkbook, getSyncState } from './workbook';
+import { parseDefectId, type ParsedCase, type ParsedIssue } from './sheets';
 import {
   HEALTH_WEIGHTS,
   PRIORITY_ORDER,
   STATUS_ORDER,
+  deriveStage,
   healthBand,
-  type IssueStage,
 } from './constants';
 import { pct } from './format';
 import type {
@@ -15,14 +15,13 @@ import type {
   ModuleHealth,
   QaSummary,
   TestCaseDTO,
-  TrendPoint,
 } from './types';
 
-type Row = Awaited<ReturnType<typeof prisma.testCase.findMany>>[number];
+export { getSyncState };
 
-export function toDTO(c: Row): TestCaseDTO {
+export function toDTO(c: ParsedCase): TestCaseDTO {
   return {
-    id: c.id,
+    id: `${c.sheetTab}::${c.testCaseId}`,
     testCaseId: c.testCaseId,
     sheetTab: c.sheetTab,
     rowNumber: c.rowNumber,
@@ -44,48 +43,59 @@ export function toDTO(c: Row): TestCaseDTO {
     comments: c.comments,
     sourceLabel: c.sourceLabel,
     whyManual: c.whyManual,
-    execution: c.execution === 'Automated' ? 'Automated' : 'Manual',
+    execution: c.execution,
   };
 }
 
-export function issueToDTO(i: Awaited<ReturnType<typeof prisma.issue.findMany>>[number]): IssueDTO {
-  const parse = (s: string): string[] => {
-    try {
-      const v = JSON.parse(s);
-      return Array.isArray(v) ? v.map(String) : [];
-    } catch {
-      return [];
-    }
-  };
+/**
+ * An issue's linked test cases come from the case tabs' Defect ID column —
+ * write the Issue ID there and this derives which cases it covers.
+ */
+export function buildIssueDTOs(issues: ParsedIssue[], cases: TestCaseDTO[]): IssueDTO[] {
   const day = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
-  return {
-    id: i.id,
-    number: i.number,
-    repo: i.repo,
-    title: i.title,
-    url: i.url,
-    testCaseIds: parse(i.testCaseIds),
-    module: i.module,
-    area: i.area,
-    severity: i.severity,
-    labels: parse(i.labels),
-    stage: i.stage as IssueStage,
-    reporter: i.reporter,
-    assignee: i.assignee,
-    createdAt: day(i.createdAt) ?? '',
-    closedAt: day(i.closedAt),
-    closedBy: i.closedBy,
-    resolution: i.resolution,
-    retestAt: day(i.retestAt),
-    retestBy: i.retestBy,
-    retestResult: i.retestResult,
-    retestNote: i.retestNote,
-    confirmedAt: day(i.confirmedAt),
-    confirmedBy: i.confirmedBy,
-    confirmNote: i.confirmNote,
-    reopened: i.reopened,
-    ghState: i.ghState,
-  };
+
+  return issues.map((i) => {
+    const linked = cases.filter((c) => parseDefectId(c.defectId) === i.issueId);
+    const tcIds = linked.map((c) => c.testCaseId);
+    const first = linked[0];
+
+    const module = i.module ?? first?.module ?? null;
+    const area = i.area ?? first?.area ?? null;
+    const retestResult = i.retestResult;
+    const stage = deriveStage({
+      closedAt: i.closedAt,
+      assignee: i.assignee,
+      retestResult,
+      confirmedAt: i.confirmedAt,
+    });
+
+    return {
+      id: `Issue::${i.issueId}`,
+      number: i.issueId,
+      title: i.title,
+      url: i.url,
+      testCaseIds: tcIds,
+      module,
+      area,
+      severity: i.severity,
+      labels: i.labels,
+      stage,
+      reporter: i.reporter,
+      assignee: i.assignee,
+      createdAt: day(i.createdAt) ?? '',
+      closedAt: day(i.closedAt),
+      closedBy: i.closedAt ? i.assignee : null,
+      resolution: i.resolution,
+      retestAt: day(i.retestAt),
+      retestBy: i.retestBy,
+      retestResult,
+      retestNote: i.retestNote,
+      confirmedAt: day(i.confirmedAt),
+      confirmedBy: i.confirmedBy,
+      confirmNote: i.confirmNote,
+      reopened: retestResult === 'Fail' ? 1 : 0,
+    };
+  });
 }
 
 /** A case counts as executed when it passed or failed. Blocked and Retest are
@@ -198,13 +208,9 @@ export function issuePipeline(issues: IssueDTO[]): IssuePipeline {
 }
 
 export async function getSummary(): Promise<QaSummary> {
-  const [rows, issueRows, sync] = await Promise.all([
-    prisma.testCase.findMany({ where: { deletedAt: null } }),
-    prisma.issue.findMany(),
-    getSyncState(),
-  ]);
+  const [wb, sync] = await Promise.all([getWorkbook(), getSyncState()]);
 
-  const all = rows.map(toDTO);
+  const all = wb.cases.map(toDTO);
   const manual = all.filter((c) => c.execution === 'Manual');
   const automated = all.filter((c) => c.execution === 'Automated');
 
@@ -250,7 +256,7 @@ export async function getSummary(): Promise<QaSummary> {
     )
     .slice(0, 8);
 
-  const issues = issueRows.map(issueToDTO);
+  const issues = buildIssueDTOs(wb.issues, all);
 
   return {
     total,
@@ -282,60 +288,20 @@ export async function getSummary(): Promise<QaSummary> {
     coverageByArea: coverage(manual, 'area'),
     attention,
     recent,
-    executionDates: [...new Set(manual.map((c) => c.executedAt).filter(Boolean))].sort() as string[],
     issuePipeline: issuePipeline(issues),
     sync,
   };
 }
 
 export async function getCases(): Promise<TestCaseDTO[]> {
-  const rows = await prisma.testCase.findMany({
-    where: { deletedAt: null },
-    orderBy: [{ area: 'asc' }, { testCaseId: 'asc' }],
-  });
-  return rows.map(toDTO);
+  const wb = await getWorkbook();
+  return wb.cases
+    .map(toDTO)
+    .sort((a, b) => a.area.localeCompare(b.area) || a.testCaseId.localeCompare(b.testCaseId));
 }
 
 export async function getIssues(): Promise<IssueDTO[]> {
-  const rows = await prisma.issue.findMany({ orderBy: { number: 'asc' } });
-  return rows.map(issueToDTO);
-}
-
-export async function getTrends(days = 90): Promise<TrendPoint[]> {
-  const since = new Date(Date.now() - days * 86_400_000);
-  const snaps = await prisma.qaSnapshot.findMany({
-    where: { capturedOn: { gte: since } },
-    orderBy: { capturedOn: 'asc' },
-  });
-  return snaps.map((s) => {
-    const executed = s.passed + s.failed;
-    return {
-      date: s.capturedOn.toISOString().slice(0, 10),
-      passed: s.passed,
-      failed: s.failed,
-      blocked: s.blocked,
-      executed,
-      inScope: s.inScope,
-      passPct: pct(s.passed, executed),
-      executionPct: pct(executed, s.inScope),
-      healthScore: s.healthScore,
-      openIssues: s.openIssues,
-    };
-  });
-}
-
-export async function getActivity(limit = 25) {
-  const revs = await prisma.testCaseRevision.findMany({
-    orderBy: { changedAt: 'desc' },
-    take: limit,
-    include: { testCase: { select: { scenario: true, module: true, area: true } } },
-  });
-  return revs.map((r) => ({
-    testCaseId: r.testCaseId,
-    scenario: r.testCase?.scenario ?? r.testCaseId,
-    module: r.testCase?.module ?? r.testCase?.area ?? null,
-    fromStatus: r.fromStatus,
-    toStatus: r.toStatus,
-    changedAt: r.changedAt.toISOString(),
-  }));
+  const wb = await getWorkbook();
+  const cases = wb.cases.map(toDTO);
+  return buildIssueDTOs(wb.issues, cases).sort((a, b) => a.number - b.number);
 }

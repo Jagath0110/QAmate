@@ -4,6 +4,8 @@ import {
   AUTOMATED_TAB,
   CASE_HEADERS,
   CASE_TABS,
+  ISSUE_HEADERS,
+  ISSUES_TAB,
   LISTS_TAB,
   STATUSES,
 } from './constants';
@@ -41,8 +43,33 @@ export interface SheetEnums {
   platforms: string[];
 }
 
+/** One row of the Issues tab. testCaseIds/reopened/stage are derived
+ *  elsewhere from this plus the case list — never stored on the row. */
+export interface ParsedIssue {
+  issueId: number;
+  title: string;
+  module: string | null;
+  area: string | null;
+  severity: string;
+  reporter: string | null;
+  assignee: string | null;
+  createdAt: Date | null;
+  closedAt: Date | null;
+  resolution: string | null;
+  retestAt: Date | null;
+  retestBy: string | null;
+  retestResult: string | null;
+  retestNote: string | null;
+  confirmedAt: Date | null;
+  confirmedBy: string | null;
+  confirmNote: string | null;
+  labels: string[];
+  url: string | null;
+}
+
 export interface SheetReadResult {
   cases: ParsedCase[];
+  issues: ParsedIssue[];
   enums: SheetEnums;
   warnings: SyncWarning[];
   rowsRead: number;
@@ -401,6 +428,128 @@ export function parseListsTab(grid: string[][]): SheetEnums {
   };
 }
 
+/** "#412", "412", "ISS-412" or a full URL all resolve to 412. Used to link a
+ *  case's Defect ID to a row on the Issues tab. */
+export function parseDefectId(defectId: string | null | undefined): number | null {
+  if (!defectId) return null;
+  const m = /(\d{1,7})/.exec(defectId);
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * The Issues tab. Same philosophy as parseCaseTab: headers mapped by name, a
+ * renamed/missing header aborts the sync. Test Case IDs are not a column —
+ * they are derived by scanning the case tabs' Defect ID column for this row's
+ * Issue ID, so QA never enters the same fact twice.
+ */
+export function parseIssuesTab(
+  grid: string[][],
+  warnings: SyncWarning[]
+): ParsedIssue[] {
+  if (!grid.length) return [];
+
+  const header = grid[0].map((h) => clean(h) ?? '');
+  const missing = ISSUE_HEADERS.filter((h) => !header.includes(h));
+  if (missing.length) {
+    throw new SheetSchemaError(
+      `Tab "${ISSUES_TAB}" is missing expected column(s): ${missing.join(', ')}. ` +
+        `Sync aborted — no data was changed. Restore the header row or update ISSUE_HEADERS.`
+    );
+  }
+  const col = (name: string) => header.indexOf(name);
+  const idx = {
+    id: col('Issue ID'),
+    title: col('Title'),
+    module: col('Module'),
+    area: col('Area'),
+    severity: col('Severity'),
+    reporter: col('Reporter'),
+    assignee: col('Assignee'),
+    created: col('Created Date'),
+    resolved: col('Resolved Date'),
+    resolution: col('Resolution'),
+    retestDate: col('Retest Date'),
+    retestBy: col('Retest By'),
+    retestResult: col('Retest Result'),
+    retestNote: col('Retest Note'),
+    confirmedDate: col('Confirmed Date'),
+    confirmedBy: col('Confirmed By'),
+    confirmNote: col('Confirm Note'),
+    labels: col('Labels'),
+    url: col('URL'),
+  };
+
+  const out: ParsedIssue[] = [];
+  const seen = new Set<number>();
+
+  for (let r = 1; r < grid.length; r++) {
+    const row = grid[r];
+    const rowNumber = r + 1;
+    const rawId = clean(row[idx.id]);
+    if (!rawId) continue; // blank / banner row
+
+    const issueId = Number(rawId.replace(/[^\d]/g, ''));
+    if (!issueId || Number.isNaN(issueId)) {
+      warnings.push({
+        rule: 'issue-id-format',
+        tab: ISSUES_TAB,
+        row: rowNumber,
+        testCaseId: null,
+        message: `Issue ID "${rawId}" is not a number. Row skipped.`,
+      });
+      continue;
+    }
+    if (seen.has(issueId)) {
+      warnings.push({
+        rule: 'duplicate-issue-id',
+        tab: ISSUES_TAB,
+        row: rowNumber,
+        testCaseId: null,
+        message: `Duplicate Issue ID ${issueId}. Only the first occurrence was imported.`,
+      });
+      continue;
+    }
+    seen.add(issueId);
+
+    const retestResult = clean(row[idx.retestResult]);
+    if (retestResult && retestResult !== 'Pass' && retestResult !== 'Fail') {
+      warnings.push({
+        rule: 'invalid-retest-result',
+        tab: ISSUES_TAB,
+        row: rowNumber,
+        testCaseId: null,
+        message: `Retest Result "${retestResult}" on Issue ${issueId} should be Pass or Fail. Imported as empty.`,
+      });
+    }
+
+    const labelsRaw = clean(row[idx.labels]);
+
+    out.push({
+      issueId,
+      title: clean(row[idx.title]) ?? `Issue ${issueId}`,
+      module: clean(row[idx.module]),
+      area: clean(row[idx.area]),
+      severity: clean(row[idx.severity]) ?? 'Medium',
+      reporter: clean(row[idx.reporter]),
+      assignee: clean(row[idx.assignee]),
+      createdAt: parseDate(row[idx.created]),
+      closedAt: parseDate(row[idx.resolved]),
+      resolution: clean(row[idx.resolution]),
+      retestAt: parseDate(row[idx.retestDate]),
+      retestBy: clean(row[idx.retestBy]),
+      retestResult: retestResult === 'Pass' || retestResult === 'Fail' ? retestResult : null,
+      retestNote: clean(row[idx.retestNote]),
+      confirmedAt: parseDate(row[idx.confirmedDate]),
+      confirmedBy: clean(row[idx.confirmedBy]),
+      confirmNote: clean(row[idx.confirmNote]),
+      labels: labelsRaw ? labelsRaw.split(',').map((s) => s.trim()).filter(Boolean) : [],
+      url: clean(row[idx.url]),
+    });
+  }
+
+  return out;
+}
+
 /**
  * Read the whole workbook in ONE batchGet. Ten separate calls would burn quota
  * and take five times as long.
@@ -412,7 +561,7 @@ export async function readWorkbook(): Promise<SheetReadResult> {
     );
   }
   const sheets = google.sheets({ version: 'v4', auth: authClient() });
-  const tabs = [...CASE_TABS, AUTOMATED_TAB, LISTS_TAB];
+  const tabs = [...CASE_TABS, AUTOMATED_TAB, LISTS_TAB, ISSUES_TAB];
 
   const res = await sheets.spreadsheets.values.batchGet({
     spreadsheetId: process.env.QA_SHEET_ID!,
@@ -442,5 +591,7 @@ export async function readWorkbook(): Promise<SheetReadResult> {
   rowsRead += Math.max(0, autoGrid.length - 1);
   cases = cases.concat(parseAutomatedTab(autoGrid));
 
-  return { cases, enums, warnings, rowsRead };
+  const issues = parseIssuesTab(gridFor(ISSUES_TAB), warnings);
+
+  return { cases, issues, enums, warnings, rowsRead };
 }

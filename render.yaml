@@ -1,0 +1,44 @@
+services:
+  - type: web
+    name: qamate
+    runtime: node
+    region: singapore
+    plan: starter
+    branch: feat/qamate-app
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    healthCheckPath: /qa
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"
+      - key: SYNC_STALE_WARN_MINUTES
+        value: "15"
+      - key: SYNC_STALE_ERROR_MINUTES
+        value: "60"
+      - key: GOOGLE_SERVICE_ACCOUNT_KEY
+        sync: false
+      - key: QA_SHEET_ID
+        sync: false
+      - key: SYNC_WEBHOOK_SECRET
+        sync: false
+      - key: SHARE_TOKEN_SECRET
+        sync: false
+
+  - type: cron
+    name: qamate-sync
+    runtime: node
+    region: singapore
+    plan: starter
+    branch: feat/qamate-app
+    schedule: "*/10 * * * *"
+    buildCommand: "true"
+    startCommand: >
+      curl -fsS -X POST
+      -H "X-QA-Sync-Secret: $SYNC_WEBHOOK_SECRET"
+      "https://qamate.onrender.com/api/sync/run?trigger=cron"
+    envVars:
+      - key: SYNC_WEBHOOK_SECRET
+        sync: false

@@ -81,9 +81,7 @@ export function IssueDrawer({
       <div className="drawer" role="dialog" aria-modal="true" aria-labelledby="iTitle">
         <div className="dhead">
           <div>
-            <div className="tcid">
-              {i.repo} · issue #{i.number}
-            </div>
+            <div className="tcid">Issue #{i.number}</div>
             <h3 id="iTitle">{i.title}</h3>
             <div style={{ marginTop: 8, display: 'flex', gap: 7, flexWrap: 'wrap' }}>
               <span className="badge" style={{ color: stage.color, background: 'var(--surface-2)' }}>
@@ -154,8 +152,8 @@ export function IssueDrawer({
               <Step
                 state="done"
                 num={1}
-                head="Issue created in GitHub"
-                meta={`${i.createdAt} · ${i.reporter ?? 'unknown'} · ${i.repo}#${i.number}`}
+                head="Issue created"
+                meta={`${i.createdAt} · ${i.reporter ?? 'unknown'} · Issue #${i.number}`}
                 body={`Raised from ${i.testCaseIds.length} failed test case${
                   i.testCaseIds.length === 1 ? '' : 's'
                 }${i.assignee ? `, assigned to ${i.assignee}` : ', not yet assigned'}.`}
@@ -165,15 +163,15 @@ export function IssueDrawer({
                 <Step
                   state="done"
                   num={2}
-                  head="Closed / resolved in GitHub"
+                  head="Closed / resolved"
                   meta={`${i.closedAt}${i.closedBy ? ` · ${i.closedBy}` : ''}`}
-                  body={i.resolution ?? 'Closed in GitHub.'}
+                  body={i.resolution ?? 'Closed.'}
                 />
               ) : (
                 <Step
                   state="pending"
                   num={2}
-                  head="Closed / resolved in GitHub"
+                  head="Closed / resolved"
                   body={
                     i.stage === 'in_progress'
                       ? `Fix in progress with ${i.assignee ?? 'the team'}.`
@@ -198,7 +196,7 @@ export function IssueDrawer({
                   body={
                     i.closedAt
                       ? 'Fix is merged. QA has not re-run the linked test cases yet.'
-                      : 'Blocked until the fix is resolved in GitHub.'
+                      : 'Blocked until the fix is resolved.'
                   }
                 />
               )}
@@ -230,10 +228,10 @@ export function IssueDrawer({
 
           {i.url ? (
             <div className="field">
-              <div className="k">GitHub</div>
+              <div className="k">Link</div>
               <div className="v">
                 <a href={i.url} target="_blank" rel="noreferrer">
-                  {i.repo}#{i.number} ↗
+                  Issue #{i.number} ↗
                 </a>
               </div>
             </div>

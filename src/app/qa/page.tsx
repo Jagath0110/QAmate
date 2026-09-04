@@ -1,4 +1,4 @@
-import { getSummary, getTrends } from '@/lib/metrics';
+import { getSummary } from '@/lib/metrics';
 import {
   AttentionList,
   AutomationSplit,
@@ -8,14 +8,13 @@ import {
   KpiStrip,
   ModuleHealthTable,
   RecentTable,
-  TrendPanel,
 } from '@/components/Summary';
 import { Banner } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
 
 export default async function SummaryPage() {
-  const [s, trends] = await Promise.all([getSummary(), getTrends(90)]);
+  const s = await getSummary();
 
   return (
     <>
@@ -28,15 +27,6 @@ export default async function SummaryPage() {
         <Banner tone="warn">
           <b>Data is getting stale.</b> The last successful sync was more than{' '}
           {process.env.SYNC_STALE_WARN_MINUTES ?? 15} minutes ago.
-        </Banner>
-      ) : null}
-
-      {s.sync.source === 'seed' ? (
-        <Banner tone="info">
-          <b>Running on the seeded snapshot.</b> Google Sheets is not configured, so these are the 298 manual
-          cases and 135 automated scenarios captured from the QA workbook. Set{' '}
-          <code>GOOGLE_SERVICE_ACCOUNT_KEY</code> and <code>QA_SHEET_ID</code> in <code>.env</code> for live
-          sync.
         </Banner>
       ) : null}
 
@@ -62,10 +52,7 @@ export default async function SummaryPage() {
         </div>
       </div>
 
-      <div className="grid2">
-        <AutomationSplit s={s} />
-        <TrendPanel points={trends} firstDate={s.executionDates[0] ?? null} />
-      </div>
+      <AutomationSplit s={s} />
 
       <IssuePipelineStrip s={s} linkToIssues />
 
@@ -73,8 +60,7 @@ export default async function SummaryPage() {
 
       <div className="foot">
         <span>
-          Source: <span className="mono">OraxsHumanManualTestReportv1</span> ·{' '}
-          {s.sync.source === 'sheet' ? 'Google Sheet' : 'seeded snapshot'}
+          Source: <span className="mono">OraxsHumanManualTestReportv1</span> · Google Sheet
         </span>
         <span>Suite created 2026-09-02 · derived from Oraxs Master Test Report v3</span>
         <span>

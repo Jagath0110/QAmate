@@ -1,10 +1,11 @@
 # QAmate — Oraxs QA Console
 
-A client-facing QA dashboard driven from the QA team's Google Sheet.
-Two levels: a **QA Summary** (health, progress, coverage, risk) and the
-**complete test case list** with search, filters and a full detail view — plus an
-**Issues** tab that tracks every failure from GitHub issue through fix, retest
-and senior sign-off.
+A client-facing QA dashboard driven **entirely from the QA team's Google
+Sheet** — no database. Two levels: a **QA Summary** (health, progress,
+coverage, risk) and the **complete test case list** with search, filters and a
+full detail view — plus an **Issues** tab that tracks every failure from
+creation through fix, retest and senior sign-off, sourced from an `Issues` tab
+in the same spreadsheet.
 
 Built against the real structure of `OraxsHumanManualTestReportv1` — its 19
 columns, 7 test tabs, 32 modules and 22 test types.
@@ -16,14 +17,12 @@ columns, 7 test tabs, 32 modules and 22 test types.
 ```bash
 npm install
 cp .env.example .env      # Windows: copy .env.example .env
-npm run setup             # generate Prisma client, create the DB, load seed data
 npm run dev               # http://localhost:3000/qa
 ```
 
-`npm run setup` works with **no credentials**. It loads a captured snapshot of
-the workbook — 298 manual cases and 135 automated scenarios — so you can see the
-finished product immediately. Add Google and GitHub credentials to `.env` when
-you want live data; nothing else changes.
+No setup step, no database — but there is also **no sample data**. With
+`.env` empty, `/qa` shows a setup screen explaining exactly what to configure
+(see "Connecting the Google Sheet" below) instead of a fake dashboard.
 
 Requires Node 18.18+.
 
@@ -42,7 +41,6 @@ Requires Node 18.18+.
 | **Needs attention** | The failed, blocked and retest cases, clickable |
 | **Coverage charts** | By test type, priority and platform — each split executed vs. not-yet-run |
 | **Manual vs. automated** | Automation coverage, and *why* 298 cases need a human |
-| **Pass-rate trend** | Plots from daily snapshots; explains itself until two exist |
 | **Defect & issue status** | The 4-step lifecycle at a glance, linking to the Issues tab |
 | **Recently updated** | Newest execution results from the sheet |
 
@@ -61,7 +59,7 @@ Filter state lives in the URL, so any filtered view is a shareable link.
 The defect lifecycle as one pipeline:
 
 ```
-Issue created in GitHub → Closed / resolved → Retested by QA → Confirmed by mentor / senior
+Issue created → Closed / resolved → Retested by QA → Confirmed by mentor / senior
 ```
 
 Each row carries a four-dot tracker so you can see where an issue is stuck; a
@@ -74,25 +72,26 @@ for steps that have not happened, *why they are still pending*.
 ## How the data gets in
 
 ```
-Google Sheet ──(Apps Script onEdit, debounced)──▶ POST /api/sync/webhook
-     │                                                    │
-     └──(cron every 10 min, full reconcile)──▶ SyncService ┤
-                                                          ▼
-                              SQLite:  TestCase · TestCaseRevision
-                                       QaSnapshot · SyncRun · Issue
-                                                          │
+Google Sheet ──(read via googleapis)──▶ in-memory workbook cache (~60s TTL)
+                                                    │
+                          POST /api/sync/run or /api/sync/webhook
+                                    forces an immediate refetch
+                                                    │
                                     /qa (server-rendered) ┴ /api/qa/*
 ```
 
-The frontend never talks to Google. A server-side sync reads the sheet and
-upserts into the database, because:
+There is **no database**. Render runs this app as one long-lived Node process,
+so a module-level cache (`src/lib/workbook.ts`) is the natural place to hold
+the parsed workbook — every page and API route reads from it, never straight
+from Google, so a page load costs nothing beyond the cache lookup and a burst
+of clicks doesn't burn Sheets API quota.
 
-- **Trend charts need stored history.** A sheet only holds today's state; it can
-  never produce yesterday's numbers retroactively.
-- **Page loads stay in milliseconds** instead of 400–1500 ms per Sheets call.
-- **A Google outage shows stale data with a banner**, not an error page.
-- **Clients never touch the sheet** — no sharing the source document, no
-  exposure of internal notes.
+Trade-off accepted deliberately: **there is no history.** The old
+database-backed version stored a daily snapshot for trend charts and a
+revision log for an activity feed. A live sheet only ever holds *today's*
+state, so both were removed rather than left as permanently-empty features.
+"Recently updated" on the Summary page still works — it's sorted by each
+case's own Execution Date, not by stored history.
 
 ### Connecting the Google Sheet
 
@@ -101,12 +100,16 @@ upserts into the database, because:
    so the dashboard can never corrupt QA's work.
 3. Put the service-account JSON (base64, one line) in `GOOGLE_SERVICE_ACCOUNT_KEY`
    and the sheet id in `QA_SHEET_ID`.
-4. `npm run sync`
+4. `npm run check:sheet` to verify — reload the app once it passes.
 
-### Keeping it in sync
+### Keeping it fresh
 
-**Full reconcile every 10 minutes** — the only trigger that can detect rows
-*deleted* from the sheet:
+The in-memory cache refetches on its own after ~60 seconds. To force it
+sooner:
+
+**Cron, every 10 minutes** (also the only way to notice rows *deleted* from
+the sheet, since a stale cache entry would otherwise just linger until its
+next natural refetch):
 
 ```jsonc
 // vercel.json
@@ -124,31 +127,40 @@ script to paste into the sheet is in the comment block at the top of
 `src/app/api/sync/webhook/route.ts`. Set `SYNC_WEBHOOK_SECRET` to the same value
 in both places; calls are HMAC-signed.
 
-The webhook runs a *partial* sync — it sees the sheet mid-edit and must never
-conclude that unseen rows were deleted. Deletions are the cron's job, and they
-are **soft** deletes: an accidental row deletion in the sheet stays recoverable.
+Both routes just invalidate the cache and refetch immediately — there's no
+reconciliation to run, since there's no database copy to keep in sync.
 
-### Connecting GitHub
+### The Issues tab
 
-Set `GITHUB_TOKEN` (fine-grained PAT, read access to Issues) and `GITHUB_REPO`.
+Add an **`Issues`** tab to the same spreadsheet (same rules as the case tabs:
+headers mapped by name, a renamed/missing header aborts the read). 19 columns:
 
-The link between a test case and an issue is the sheet's **Defect ID** column —
-write `#412`, `412` or the full issue URL and the app pulls that issue's real
-title, state, assignee and close date.
+```
+Issue ID | Title | Module | Area | Severity | Reporter | Assignee |
+Created Date | Resolved Date | Resolution | Retest Date | Retest By |
+Retest Result | Retest Note | Confirmed Date | Confirmed By | Confirm Note |
+Labels | URL
+```
 
-The QA half of the lifecycle is not something GitHub knows, so it comes from
-labels and comments — which keeps QA in one tool:
+The link to test cases is the case tabs' existing **Defect ID** column — write
+the Issue ID there (`1`, `#1`, …) and the app derives which test cases an
+issue covers. `Test Case IDs` is never a column on the Issues tab itself, so
+QA never enters the same fact twice. `Retest Result` should be `Pass` or
+`Fail`; the four-step lifecycle stage is derived from the dates and retest
+result, the same logic as before — never stored directly.
 
-| Signal | Meaning |
-|---|---|
-| label `qa:retest-passed` / `qa:retest-failed` | retest outcome |
-| label `qa:confirmed` | senior / mentor sign-off |
-| label `severity:critical\|high\|medium\|low` | severity |
-| comment starting `QA RETEST:` | retest note, dated, attributed to the commenter |
-| comment starting `QA CONFIRMED:` | sign-off note, dated, attributed |
-| label `qa` | include an issue even before its number is in the sheet |
+Without an `Issues` tab (or without Sheets configured at all), the read fails
+entirely and `/qa` shows the setup screen — see "No mock data" below.
 
-Without a token the tab shows 16 worked examples with a banner saying so.
+### No mock data
+
+If the sheet has never been read successfully — not configured, wrong
+permissions, missing tabs, a schema mismatch — `/qa` shows a plain setup
+screen with the exact error and what to fix (`src/components/SheetNotConnected.tsx`),
+never a fabricated dashboard. Once a read has succeeded at least once, a later
+*transient* failure keeps showing that last real data with a stale/error
+banner instead of blanking out — that's resilience, not mock data; every
+number on screen always traces back to an actual sheet read.
 
 ---
 
@@ -193,9 +205,12 @@ whatever the sheet says.
 | **Actual Result present but Status is *Not Run*** | import, warn |
 | Fail with no Defect ID | import, warn |
 | Execution Date in the future | import, warn |
-| Row vanished from the sheet | soft delete, warn |
 
-Three issues already present in the sample workbook, which these rules catch:
+A row that disappears from the sheet simply disappears from the dashboard on
+the next refresh — there's no soft-delete/undo, because there's no database
+copy to reconcile against. The sheet itself is the only copy.
+
+Two issues already present in the sample workbook, which these rules catch:
 
 1. **`Edge` (25 cases) and `Build` (1)** are used in the Type column but are not
    in the `Lists` tab — the dropdown has drifted from the data.
@@ -203,8 +218,6 @@ Three issues already present in the sample workbook, which these rules catch:
    Result but are still marked *Not Run*, with no tester and no date. They are
    silently missing from the executed count — the true execution figure is 55,
    not 50.
-3. **Defect ID is empty across all 298 rows**, so the Issues tab and defect
-   trends run on seed data until QA starts recording issue keys.
 
 ---
 
@@ -217,7 +230,7 @@ The dashboard is only as good as the sheet.
 2. **Set Status from the dropdown, always.** Free text imports as *Not Run* and
    quietly understates progress.
 3. **Fill Execution Date and Tester whenever Status changes.** They drive the
-   trend, the activity feed and the date filter.
+   "recently updated" list and the date filter.
 4. **Record a Defect ID on every Fail.** This is what populates the Issues tab.
 5. **Keep `Lists` in step with reality** — add `Edge` and `Build` to the Type
    list, or re-tag those 26 cases.
@@ -231,16 +244,13 @@ regression-run tracking and per-release quality reporting.
 ## Project layout
 
 ```
-prisma/schema.prisma           TestCase · TestCaseRevision · QaSnapshot · SyncRun · Issue
-scripts/seed.ts                first-run seed
-scripts/sync-once.ts           one full sync from the CLI
+scripts/check-sheet.ts         connection + schema diagnostic (auth, tabs, headers)
 src/lib/constants.ts           every enum, the health formula, stage derivation
 src/lib/sheets.ts              Sheets client, parser, validation rules
-src/lib/sync.ts                upsert · content hashing · soft delete · snapshots
-src/lib/github.ts              issue fetch + QA lifecycle from labels/comments
+src/lib/workbook.ts            in-memory cache, no-mock-data guarantee, staleness state
 src/lib/metrics.ts             every number the dashboard shows, defined once
 src/app/qa/…                   Summary · Cases · Issues
-src/app/api/…                  summary · cases · issues · trends · activity · export · sync
+src/app/api/…                  summary · cases · issues · export · sync
 src/components/…               AppShell · Summary · CaseTable · CaseDrawer · IssueBoard · IssueDrawer · ui
 ```
 
@@ -248,20 +258,12 @@ src/components/…               AppShell · Summary · CaseTable · CaseDrawer 
 
 | Endpoint | Returns |
 |---|---|
-| `GET /api/qa/summary` | every KPI, module rollup, coverage, health score, sync state |
+| `GET /api/qa/summary` | every KPI, module rollup, coverage, health score, cache state |
 | `GET /api/qa/cases` | paginated, filterable case list |
 | `GET /api/qa/issues` | issues + lifecycle pipeline counts |
-| `GET /api/qa/trends?days=90` | snapshot series for trend charts |
-| `GET /api/qa/activity?limit=25` | recent status changes |
 | `GET /api/qa/export?format=csv&…` | current filtered view as CSV |
-| `POST /api/sync/run` | manual / cron sync (full reconcile) |
-| `POST /api/sync/webhook` | Apps Script entry point (partial, HMAC-signed) |
-
-## Moving to PostgreSQL
-
-Change the datasource in `prisma/schema.prisma` to `provider = "postgresql"`,
-point `DATABASE_URL` at your instance, and run `npx prisma db push`. No model
-changes are needed.
+| `POST /api/sync/run` | invalidate the cache and refetch the sheet now |
+| `POST /api/sync/webhook` | Apps Script entry point (HMAC-signed), same refetch |
 
 ## Design notes
 
