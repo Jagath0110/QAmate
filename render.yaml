@@ -4,7 +4,8 @@ services:
     runtime: node
     region: singapore
     plan: starter
-    branch: feat/qamate-app
+    # Render auto-deploys every push to the GitHub default branch, including PR merges.
+    branch: main
     buildCommand: npm install && npm run build
     startCommand: npm run start
     healthCheckPath: /qa
@@ -32,7 +33,7 @@ services:
     runtime: node
     region: singapore
     plan: starter
-    branch: feat/qamate-app
+    branch: main
     schedule: "*/10 * * * *"
     buildCommand: "true"
     startCommand: >
