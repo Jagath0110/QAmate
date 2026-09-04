@@ -1,4 +1,4 @@
-import { getSummary, getTrends } from '@/lib/metrics';
+import { getSummary } from '@/lib/metrics';
 import {
   AttentionList,
   AutomationSplit,
@@ -8,14 +8,13 @@ import {
   KpiStrip,
   ModuleHealthTable,
   RecentTable,
-  TrendPanel,
 } from '@/components/Summary';
 import { Banner } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
 
 export default async function SummaryPage() {
-  const [s, trends] = await Promise.all([getSummary(), getTrends(90)]);
+  const s = await getSummary();
 
   return (
     <>
@@ -62,10 +61,7 @@ export default async function SummaryPage() {
         </div>
       </div>
 
-      <div className="grid2">
-        <AutomationSplit s={s} />
-        <TrendPanel points={trends} firstDate={s.executionDates[0] ?? null} />
-      </div>
+      <AutomationSplit s={s} />
 
       <IssuePipelineStrip s={s} linkToIssues />
 

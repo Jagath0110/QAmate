@@ -60,6 +60,7 @@ export const CASE_TABS = [
 /** Four columns only, a different shape from the case tabs. */
 export const AUTOMATED_TAB = 'Excluded (automatable)';
 export const LISTS_TAB = 'Lists';
+export const ISSUES_TAB = 'Issues';
 
 /**
  * The header row of every case tab, in sheet order. The importer maps by NAME,
@@ -86,6 +87,33 @@ export const CASE_HEADERS = [
   'Comments',
   'Source',
   'Why manual',
+] as const;
+
+/**
+ * The header row of the Issues tab. Test Case IDs are NOT a column here —
+ * they are derived from the case tabs' Defect ID column, same link the old
+ * GitHub integration used, so QA never enters the same fact twice.
+ */
+export const ISSUE_HEADERS = [
+  'Issue ID',
+  'Title',
+  'Module',
+  'Area',
+  'Severity',
+  'Reporter',
+  'Assignee',
+  'Created Date',
+  'Resolved Date',
+  'Resolution',
+  'Retest Date',
+  'Retest By',
+  'Retest Result',
+  'Retest Note',
+  'Confirmed Date',
+  'Confirmed By',
+  'Confirm Note',
+  'Labels',
+  'URL',
 ] as const;
 
 // --- Issue lifecycle -------------------------------------------------------

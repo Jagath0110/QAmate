@@ -1,8 +1,7 @@
 import { createHmac, timingSafeEqual } from 'crypto';
 import { NextResponse, type NextRequest } from 'next/server';
 import { revalidatePath, revalidateTag } from 'next/cache';
-import { runSync } from '@/lib/sync';
-import { syncIssues } from '@/lib/github';
+import { getWorkbook, invalidateWorkbook } from '@/lib/workbook';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -27,8 +26,8 @@ export const maxDuration = 60;
  *       headers: { 'X-QA-Signature': sig }, muteHttpExceptions: true });
  *   }
  *
- * The webhook runs a PARTIAL sync: it sees the sheet mid-edit and must never
- * conclude that unseen rows were deleted. Deletions are the cron's job.
+ * There is no database to reconcile against — this just forces the in-memory
+ * workbook cache to refetch immediately instead of waiting out its TTL.
  */
 export async function POST(req: NextRequest) {
   const secret = process.env.SYNC_WEBHOOK_SECRET;
@@ -45,18 +44,19 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = await runSync('webhook', { full: false });
-    await syncIssues();
-    if (result.created || result.updated) {
-      revalidateTag('qa-data');
-      revalidatePath('/qa');
-      revalidatePath('/qa/cases');
-      revalidatePath('/qa/issues');
-    }
-    return NextResponse.json({ ok: true, ...result }, { status: 202 });
+    invalidateWorkbook();
+    const wb = await getWorkbook();
+    revalidateTag('qa-data');
+    revalidatePath('/qa');
+    revalidatePath('/qa/cases');
+    revalidatePath('/qa/issues');
+    return NextResponse.json(
+      { ok: !wb.error, source: wb.source, cases: wb.cases.length, issues: wb.issues.length },
+      { status: 202 }
+    );
   } catch (err) {
     return NextResponse.json(
-      { ok: false, error: err instanceof Error ? err.message : 'Sync failed' },
+      { ok: false, error: err instanceof Error ? err.message : 'Refresh failed' },
       { status: 500 }
     );
   }
