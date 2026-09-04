@@ -1,8 +1,7 @@
 import { timingSafeEqual } from 'crypto';
 import { NextResponse, type NextRequest } from 'next/server';
 import { revalidateTag, revalidatePath } from 'next/cache';
-import { runSync } from '@/lib/sync';
-import { syncIssues } from '@/lib/github';
+import { getWorkbook, getSyncState, invalidateWorkbook } from '@/lib/workbook';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -19,10 +18,9 @@ function isAuthorized(req: NextRequest): boolean {
 }
 
 /**
- * Manual and cron entry point.
- *
- * Point a scheduler at this every 10 minutes for the full reconcile — it is the
- * only trigger that can detect rows deleted from the sheet.
+ * Manual and cron entry point. There is no database to reconcile — this just
+ * forces the in-memory workbook cache to refetch the sheet immediately
+ * instead of waiting out its ~60s TTL.
  *
  *   Vercel:  vercel.json → { "crons": [{ "path": "/api/sync/run", "schedule": "*\/10 * * * *" }] }
  *   Windows: schtasks /create /sc minute /mo 10 /tn QAmateSync ^
@@ -35,28 +33,28 @@ export async function POST(req: NextRequest) {
 
   const started = Date.now();
   try {
-    const result = await runSync(
-      req.nextUrl.searchParams.get('trigger') === 'cron' ? 'cron' : 'manual'
-    );
-    const issues = await syncIssues();
+    invalidateWorkbook();
+    const wb = await getWorkbook();
+    const sync = await getSyncState();
 
-    // Re-render only when something actually changed. A no-op sync costs nothing.
-    if (result.created || result.updated || result.softDeleted) {
-      revalidateTag('qa-data');
-      revalidatePath('/qa');
-      revalidatePath('/qa/cases');
-      revalidatePath('/qa/issues');
-    }
+    revalidateTag('qa-data');
+    revalidatePath('/qa');
+    revalidatePath('/qa/cases');
+    revalidatePath('/qa/issues');
 
     return NextResponse.json({
-      ok: result.status !== 'failed',
-      ...result,
-      issues,
+      ok: !wb.error,
+      source: wb.source,
+      cases: wb.cases.length,
+      issues: wb.issues.length,
+      warnings: wb.warnings,
+      error: wb.error,
+      sync,
       durationMs: Date.now() - started,
     });
   } catch (err) {
     return NextResponse.json(
-      { ok: false, error: err instanceof Error ? err.message : 'Sync failed' },
+      { ok: false, error: err instanceof Error ? err.message : 'Refresh failed' },
       { status: 500 }
     );
   }

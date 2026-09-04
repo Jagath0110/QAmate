@@ -30,7 +30,6 @@ export interface TestCaseDTO {
 export interface IssueDTO {
   id: string;
   number: number;
-  repo: string;
   title: string;
   url: string | null;
   testCaseIds: string[];
@@ -53,7 +52,6 @@ export interface IssueDTO {
   confirmedBy: string | null;
   confirmNote: string | null;
   reopened: number;
-  ghState: string | null;
 }
 
 export interface ModuleHealth {
@@ -106,7 +104,6 @@ export interface QaSummary {
   coverageByArea: CoverageRow[];
   attention: TestCaseDTO[];
   recent: TestCaseDTO[];
-  executionDates: string[];
   issuePipeline: IssuePipeline;
   sync: SyncState;
 }
@@ -128,12 +125,9 @@ export interface IssuePipeline {
 export interface SyncState {
   lastSyncedAt: string | null;
   state: 'ok' | 'stale' | 'error' | 'never';
-  trigger: string | null;
-  status: string | null;
   warnings: SyncWarning[];
   error: string | null;
   source: 'sheet' | 'seed';
-  counts: { created: number; updated: number; unchanged: number; softDeleted: number };
 }
 
 export interface SyncWarning {
@@ -142,17 +136,4 @@ export interface SyncWarning {
   row: number;
   testCaseId: string | null;
   message: string;
-}
-
-export interface TrendPoint {
-  date: string;
-  passed: number;
-  failed: number;
-  blocked: number;
-  executed: number;
-  inScope: number;
-  passPct: number;
-  executionPct: number;
-  healthScore: number;
-  openIssues: number;
 }

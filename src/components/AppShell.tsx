@@ -125,8 +125,8 @@ export function AppShell({
 }
 
 function syncLabel(sync: SyncState): string {
-  if (sync.state === 'never') return 'No sync has completed yet.';
-  if (sync.state === 'error') return sync.error ?? 'The last sync failed or is very stale.';
+  if (sync.state === 'never') return 'No data has loaded yet.';
+  if (sync.state === 'error') return sync.error ?? 'The last refresh failed or the data is very stale.';
   if (sync.state === 'stale') return 'Data is older than the warning threshold.';
-  return `Last run: ${sync.trigger ?? 'unknown'} · ${sync.counts.created} created, ${sync.counts.updated} updated`;
+  return `Reading from ${sync.source === 'sheet' ? 'the Google Sheet' : 'the seeded snapshot'}.`;
 }
