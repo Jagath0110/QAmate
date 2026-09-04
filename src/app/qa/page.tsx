@@ -30,15 +30,6 @@ export default async function SummaryPage() {
         </Banner>
       ) : null}
 
-      {s.sync.source === 'seed' ? (
-        <Banner tone="info">
-          <b>Running on the seeded snapshot.</b> Google Sheets is not configured, so these are the 298 manual
-          cases and 135 automated scenarios captured from the QA workbook. Set{' '}
-          <code>GOOGLE_SERVICE_ACCOUNT_KEY</code> and <code>QA_SHEET_ID</code> in <code>.env</code> for live
-          sync.
-        </Banner>
-      ) : null}
-
       <ExecutionLedger s={s} />
       <KpiStrip s={s} />
 
@@ -69,8 +60,7 @@ export default async function SummaryPage() {
 
       <div className="foot">
         <span>
-          Source: <span className="mono">OraxsHumanManualTestReportv1</span> ·{' '}
-          {s.sync.source === 'sheet' ? 'Google Sheet' : 'seeded snapshot'}
+          Source: <span className="mono">OraxsHumanManualTestReportv1</span> · Google Sheet
         </span>
         <span>Suite created 2026-09-02 · derived from Oraxs Master Test Report v3</span>
         <span>

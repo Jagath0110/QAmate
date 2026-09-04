@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       ok: !wb.error,
-      source: wb.source,
+      loaded: wb.loaded,
       cases: wb.cases.length,
       issues: wb.issues.length,
       warnings: wb.warnings,

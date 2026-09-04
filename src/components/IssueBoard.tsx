@@ -78,12 +78,10 @@ export function IssueBoard({
   issues,
   cases,
   pipeline,
-  isSeeded,
 }: {
   issues: IssueDTO[];
   cases: TestCaseDTO[];
   pipeline: IssuePipeline;
-  isSeeded: boolean;
 }) {
   const [f, setF] = useState({ ...EMPTY });
   const [sortKey, setSortKey] = useState<ColKey>('number');
@@ -217,21 +215,6 @@ export function IssueBoard({
 
   return (
     <>
-      {isSeeded ? (
-        <div className="banner warn">
-          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.5" />
-            <path d="M8 4.6v4M8 11.2h.01" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-          </svg>
-          <span>
-            <b>Illustrative data.</b> No Google Sheet is configured yet, so these {issues.length} issues are a
-            worked example of the lifecycle, linked to real test case IDs. Set{' '}
-            <code>GOOGLE_SERVICE_ACCOUNT_KEY</code> and <code>QA_SHEET_ID</code> in <code>.env</code>, add an{' '}
-            <code>Issues</code> tab to the sheet, and record Issue IDs in the case tabs&apos; Defect ID column.
-          </span>
-        </div>
-      ) : null}
-
       <div className="panel kpis">
         {kpis.map(([k, v, d, tone]) => (
           <div className="kpi" key={k}>

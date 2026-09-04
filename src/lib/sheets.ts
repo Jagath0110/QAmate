@@ -65,10 +65,6 @@ export interface ParsedIssue {
   confirmNote: string | null;
   labels: string[];
   url: string | null;
-  /** Seed-only: the worked-example issues declare their links explicitly
-   *  instead of through a Defect ID column (the seed cases don't have one).
-   *  Real sheet rows leave this undefined and rely on Defect ID linkage. */
-  testCaseIds?: string[];
 }
 
 export interface SheetReadResult {

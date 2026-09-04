@@ -49,16 +49,15 @@ export function toDTO(c: ParsedCase): TestCaseDTO {
 
 /**
  * An issue's linked test cases come from the case tabs' Defect ID column —
- * same link the old GitHub integration used — unless the row is a seed
- * worked-example, which declares its links explicitly.
+ * write the Issue ID there and this derives which cases it covers.
  */
 export function buildIssueDTOs(issues: ParsedIssue[], cases: TestCaseDTO[]): IssueDTO[] {
   const day = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
 
   return issues.map((i) => {
-    const derivedFromSheet = cases.filter((c) => parseDefectId(c.defectId) === i.issueId);
-    const tcIds = i.testCaseIds ?? derivedFromSheet.map((c) => c.testCaseId);
-    const first = derivedFromSheet[0];
+    const linked = cases.filter((c) => parseDefectId(c.defectId) === i.issueId);
+    const tcIds = linked.map((c) => c.testCaseId);
+    const first = linked[0];
 
     const module = i.module ?? first?.module ?? null;
     const area = i.area ?? first?.area ?? null;

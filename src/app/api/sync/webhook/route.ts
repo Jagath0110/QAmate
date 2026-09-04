@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     revalidatePath('/qa/cases');
     revalidatePath('/qa/issues');
     return NextResponse.json(
-      { ok: !wb.error, source: wb.source, cases: wb.cases.length, issues: wb.issues.length },
+      { ok: !wb.error, loaded: wb.loaded, cases: wb.cases.length, issues: wb.issues.length },
       { status: 202 }
     );
   } catch (err) {

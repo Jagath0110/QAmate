@@ -1,10 +1,13 @@
 import { AppShell } from '@/components/AppShell';
 import { getWorkbook, getSyncState } from '@/lib/workbook';
+import { SheetNotConnected } from '@/components/SheetNotConnected';
 
 export const dynamic = 'force-dynamic';
 
 export default async function QaLayout({ children }: { children: React.ReactNode }) {
   const [wb, sync] = await Promise.all([getWorkbook(), getSyncState()]);
+  if (!wb.loaded) return <SheetNotConnected error={wb.error} />;
+
   const caseCount = wb.cases.length;
   const issueCount = wb.issues.length;
 

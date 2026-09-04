@@ -61,8 +61,11 @@ needed. There's no pre-deploy step and nothing to migrate.
 | `NODE_VERSION` | `20` | Pin the Node runtime. |
 | `NEXT_TELEMETRY_DISABLED` | `1` | Optional. |
 
-Without `GOOGLE_SERVICE_ACCOUNT_KEY`/`QA_SHEET_ID` set, the app runs on the
-seeded snapshot — it never fails to start.
+There is no mock data: without `GOOGLE_SERVICE_ACCOUNT_KEY`/`QA_SHEET_ID` set
+(or if the sheet can't be read), `/qa` shows a plain setup screen with the
+exact error instead of a fabricated dashboard. The service itself still
+starts fine and the health check still passes — the app just has nothing to
+show yet.
 
 ---
 
@@ -70,8 +73,8 @@ seeded snapshot — it never fails to start.
 
 1. Trigger the first deploy. Watch the log: `npm install` → `next build` →
    `next start`. The service should reach **Live** and the health check on
-   `/qa` should pass — immediately, on the seed snapshot, even before any
-   Google credentials are set.
+   `/qa` should pass — it's a 200 response either way, whether or not the
+   sheet is connected yet.
 2. Add `GOOGLE_SERVICE_ACCOUNT_KEY` and `QA_SHEET_ID`, save (triggers a
    redeploy).
 3. Web Service → **Shell** → `npm run check:sheet` — verifies auth, sheet
@@ -138,17 +141,16 @@ no database cost at all.
 
 ## 7. Post-deploy verification checklist
 
-- [ ] Web service is **Live**; `https://qamate.onrender.com/qa` loads —
-      immediately, even before Google credentials are set (seed data).
+- [ ] Web service is **Live**; `https://qamate.onrender.com/qa` loads — shows
+      the setup screen before Google credentials are set, the real dashboard
+      after.
 - [ ] Health check on `/qa` is green in the Render dashboard.
 - [ ] `npm run check:sheet` from the Shell passes all checks, including the
       `Issues` tab.
-- [ ] A manual `POST /api/sync/run?trigger=manual` returns `"ok": true` and
-      `"source": "sheet"`.
-- [ ] The header pill on `/qa` shows it's reading from the sheet, not the seed.
-- [ ] `/qa/cases` shows the real case count from the sheet (not 433 seed).
-- [ ] `/qa/issues` shows real issues from the sheet's `Issues` tab, or the seed
-      banner if that tab is empty/missing.
+- [ ] A manual `POST /api/sync/run?trigger=manual` returns `"ok": true`.
+- [ ] `/qa` shows the real dashboard, not the setup screen.
+- [ ] `/qa/cases` shows the real case count from the sheet.
+- [ ] `/qa/issues` shows real issues from the sheet's `Issues` tab.
 - [ ] The cron job's last run is green and within the last 10 minutes.
 - [ ] (If configured) edit a cell in the sheet → within ~30s the webhook fires
       and `/qa` reflects the change.

@@ -127,7 +127,6 @@ export interface SyncState {
   state: 'ok' | 'stale' | 'error' | 'never';
   warnings: SyncWarning[];
   error: string | null;
-  source: 'sheet' | 'seed';
 }
 
 export interface SyncWarning {

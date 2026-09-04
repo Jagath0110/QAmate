@@ -20,10 +20,9 @@ cp .env.example .env      # Windows: copy .env.example .env
 npm run dev               # http://localhost:3000/qa
 ```
 
-No setup step, no database. With `.env` empty it loads a captured snapshot of
-the workbook — 298 manual cases, 135 automated scenarios, 16 example issues —
-so you can see the finished product immediately. Add Google credentials to
-`.env` when you want live data; nothing else changes.
+No setup step, no database — but there is also **no sample data**. With
+`.env` empty, `/qa` shows a setup screen explaining exactly what to configure
+(see "Connecting the Google Sheet" below) instead of a fake dashboard.
 
 Requires Node 18.18+.
 
@@ -150,8 +149,18 @@ QA never enters the same fact twice. `Retest Result` should be `Pass` or
 `Fail`; the four-step lifecycle stage is derived from the dates and retest
 result, the same logic as before — never stored directly.
 
-Without an `Issues` tab (or without Sheets configured at all) the page shows
-16 worked examples with a banner saying so.
+Without an `Issues` tab (or without Sheets configured at all), the read fails
+entirely and `/qa` shows the setup screen — see "No mock data" below.
+
+### No mock data
+
+If the sheet has never been read successfully — not configured, wrong
+permissions, missing tabs, a schema mismatch — `/qa` shows a plain setup
+screen with the exact error and what to fix (`src/components/SheetNotConnected.tsx`),
+never a fabricated dashboard. Once a read has succeeded at least once, a later
+*transient* failure keeps showing that last real data with a stale/error
+banner instead of blanking out — that's resilience, not mock data; every
+number on screen always traces back to an actual sheet read.
 
 ---
 
@@ -238,7 +247,7 @@ regression-run tracking and per-release quality reporting.
 scripts/check-sheet.ts         connection + schema diagnostic (auth, tabs, headers)
 src/lib/constants.ts           every enum, the health formula, stage derivation
 src/lib/sheets.ts              Sheets client, parser, validation rules
-src/lib/workbook.ts            in-memory cache, seed fallback, staleness state
+src/lib/workbook.ts            in-memory cache, no-mock-data guarantee, staleness state
 src/lib/metrics.ts             every number the dashboard shows, defined once
 src/app/qa/…                   Summary · Cases · Issues
 src/app/api/…                  summary · cases · issues · export · sync
