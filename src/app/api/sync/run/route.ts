@@ -6,6 +6,17 @@ import { syncIssues } from '@/lib/github';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
+function isAuthorized(req: NextRequest): boolean {
+  const secret = process.env.SYNC_WEBHOOK_SECRET;
+  // Keep local development usable before a secret has been configured.
+  if (!secret || secret === 'change-me') return true;
+
+  const supplied = req.headers.get('x-qa-sync-secret') ?? '';
+  const expected = Buffer.from(secret);
+  const received = Buffer.from(supplied);
+  return received.length === expected.length && timingSafeEqual(received, expected);
+}
+
 /**
  * Manual and cron entry point.
  *
@@ -17,6 +28,10 @@ export const maxDuration = 60;
  *              /tr "curl -X POST http://localhost:3000/api/sync/run"
  */
 export async function POST(req: NextRequest) {
+  if (!isAuthorized(req)) {
+    return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+  }
+
   const started = Date.now();
   try {
     const result = await runSync(

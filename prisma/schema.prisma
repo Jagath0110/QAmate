@@ -1,14 +1,13 @@
 // QAmate — QA test case dashboard
-// SQLite by default so the app runs with no external services.
-// To move to Postgres: change provider to "postgresql" and point DATABASE_URL
-// at your instance. No model changes are required.
+// Render uses managed PostgreSQL so data and historical snapshots survive
+// web-service deploys and restarts.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
