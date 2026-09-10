@@ -152,6 +152,46 @@ result, the same logic as before — never stored directly.
 Without an `Issues` tab (or without Sheets configured at all), the read fails
 entirely and `/qa` shows the setup screen — see "No mock data" below.
 
+### Time-based test cases
+
+Some cases can't be finished in one test run because the behaviour under test
+only happens after real time passes — a plan bought today expires in 30 days, a
+trial converts after 14, a token rotates after 90. Split those into two
+checkpoints: verify the **setup** immediately (payment took, plan is active, the
+right expiry date is stored) and record the normal Pass; then let the dashboard
+track the **time verification** until its date arrives.
+
+Three **optional** columns on any case tab drive it (`src/lib/timeverify.ts`).
+They're read only when present — adding none, some, or all of them never aborts
+the sync, unlike the 19 required headers:
+
+```
+Time Trigger Date | Verify After | Verify Result
+```
+
+- **Time Trigger Date** — the day the trigger action was performed (clock start).
+- **Verify After** — the wait: `30d`, `2w`, `3mo`, `1y`, `48h`, or a bare number
+  meaning days.
+- **Verify Result** — `Pass` / `Fail`, filled in once a human checks the outcome
+  on or after the verify-by date. Blank = not verified yet.
+
+Everything else is **derived from those plus today**, never stored, so the
+countdown is always current without a re-sync:
+
+| Derived state | Meaning |
+|---|---|
+| **Time-pending** | clock running, verify-by date still in the future ("Verify in 12d") |
+| **Verification due** | verify-by date reached, within a 3-day grace window, no result yet |
+| **Verification overdue** | grace window passed with no result — the earlier setup pass is no longer trustworthy for sign-off |
+| **Time-verified** | a `Verify Result` was recorded (pass or fail) |
+
+These cases sit **outside** Pass/Fail while the clock runs, so they neither
+inflate nor drag the pass rate. The case table has a `Time verify` column and
+filter; the drawer shows the full timeline; the QA summary shows a
+`Time-based verification` KPI when any such case exists; the CSV export adds
+`Time Trigger Date`, `Verify After`, `Verify By`, `Time State`, `Days Left` and
+`Verify Result` columns.
+
 ### No mock data
 
 If the sheet has never been read successfully — not configured, wrong
@@ -205,6 +245,9 @@ whatever the sheet says.
 | **Actual Result present but Status is *Not Run*** | import, warn |
 | Fail with no Defect ID | import, warn |
 | Execution Date in the future | import, warn |
+| `Verify After` set but no `Time Trigger Date` (or vice versa) | import, warn |
+| `Verify After` not a readable period (`30d`, `2w`, `3mo`, `1y`) | import, warn |
+| `Verify Result` not `Pass`/`Fail` | import, ignore the value, warn |
 
 A row that disappears from the sheet simply disappears from the dashboard on
 the next refresh — there's no soft-delete/undo, because there's no database

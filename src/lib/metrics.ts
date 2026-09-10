@@ -8,6 +8,7 @@ import {
   healthBand,
 } from './constants';
 import { pct } from './format';
+import { deriveTimeVerification, type TimeState } from './timeverify';
 import type {
   CoverageRow,
   IssueDTO,
@@ -44,6 +45,14 @@ export function toDTO(c: ParsedCase): TestCaseDTO {
     sourceLabel: c.sourceLabel,
     whyManual: c.whyManual,
     execution: c.execution,
+    timeTriggerAt: c.timeTriggerAt ? c.timeTriggerAt.toISOString().slice(0, 10) : null,
+    verifyAfter: c.verifyAfter,
+    verifyResult: c.verifyResult,
+    timeVerification: deriveTimeVerification({
+      triggerDate: c.timeTriggerAt,
+      period: c.verifyAfter,
+      result: c.verifyResult,
+    }),
   };
 }
 
@@ -234,6 +243,15 @@ export async function getSummary(): Promise<QaSummary> {
   const openRisk = fail + blocked + retest;
   const riskClearance = inScope ? 100 - pct(openRisk, inScope) : 100;
 
+  // Time-based cases sit outside Pass/Fail while their real-world clock runs —
+  // count them separately so they neither inflate nor drag the pass rate.
+  const timeCount = (s: TimeState) =>
+    all.filter((c) => c.timeVerification?.state === s).length;
+  const timePending = timeCount('pending');
+  const timeDue = timeCount('due');
+  const timeOverdue = timeCount('overdue');
+  const timeVerified = timeCount('verified_pass') + timeCount('verified_fail');
+
   const healthScore =
     HEALTH_WEIGHTS.pass * passPct +
     HEALTH_WEIGHTS.execution * executionPct +
@@ -277,6 +295,10 @@ export async function getSummary(): Promise<QaSummary> {
     failurePct,
     automationPct: pct(automated.length, all.length),
     openRisk,
+    timePending,
+    timeDue,
+    timeOverdue,
+    timeVerified,
     healthScore,
     healthBand: healthBand(healthScore),
     modules: moduleHealth(manual),

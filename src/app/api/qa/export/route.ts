@@ -1,10 +1,12 @@
 import { type NextRequest } from 'next/server';
 import { getCases } from '@/lib/metrics';
 import { csvCell } from '@/lib/format';
+import { TIME_STATE_META } from '@/lib/timeverify';
+import type { TestCaseDTO } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
-const HEADERS: [string, string][] = [
+const HEADERS: [string, keyof TestCaseDTO | ((c: TestCaseDTO) => unknown)][] = [
   ['TC-ID', 'testCaseId'],
   ['Area', 'area'],
   ['Module', 'module'],
@@ -25,6 +27,12 @@ const HEADERS: [string, string][] = [
   ['Source', 'sourceLabel'],
   ['Why manual', 'whyManual'],
   ['Manual / Automated', 'execution'],
+  ['Time Trigger Date', 'timeTriggerAt'],
+  ['Verify After', 'verifyAfter'],
+  ['Verify By', (c) => c.timeVerification?.verifyBy ?? ''],
+  ['Time State', (c) => (c.timeVerification ? TIME_STATE_META[c.timeVerification.state].label : '')],
+  ['Days Left', (c) => c.timeVerification?.daysLeft ?? ''],
+  ['Verify Result', 'verifyResult'],
 ];
 
 /** Clients ask for "the same view, as a spreadsheet" constantly. Honour the
@@ -44,6 +52,14 @@ export async function GET(req: NextRequest) {
     if (!eq(p.get('platform') ?? '', c.platform)) return false;
     if (!eq(p.get('execution') ?? '', c.execution)) return false;
     if (!eq(p.get('tester') ?? '', c.tester)) return false;
+    const timeState = p.get('timeState') ?? '';
+    if (timeState) {
+      const tv = c.timeVerification;
+      if (!tv) return false;
+      if (timeState === 'verified') {
+        if (tv.state !== 'verified_pass' && tv.state !== 'verified_fail') return false;
+      } else if (timeState !== 'any' && tv.state !== timeState) return false;
+    }
     if (p.get('attention') && !['Fail', 'Blocked', 'Retest'].includes(c.status)) return false;
     const from = p.get('from');
     const to = p.get('to');
@@ -59,7 +75,7 @@ export async function GET(req: NextRequest) {
   const lines = [
     HEADERS.map(([h]) => csvCell(h)).join(','),
     ...filtered.map((c) =>
-      HEADERS.map(([, k]) => csvCell((c as unknown as Record<string, unknown>)[k])).join(',')
+      HEADERS.map(([, k]) => csvCell(typeof k === 'function' ? k(c) : c[k])).join(',')
     ),
   ];
 
