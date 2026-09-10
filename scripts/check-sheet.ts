@@ -12,6 +12,7 @@ import {
   AUTOMATED_TAB,
   CASE_HEADERS,
   CASE_TABS,
+  CASE_TIME_HEADERS,
   ISSUE_HEADERS,
   ISSUES_TAB,
   LISTS_TAB,
@@ -117,7 +118,7 @@ async function main() {
   console.log('\n6. Header row of each case tab');
   const res = await sheets.spreadsheets.values.batchGet({
     spreadsheetId: sheetId!,
-    ranges: CASE_TABS.map((t) => `'${t}'!A1:S1`),
+    ranges: CASE_TABS.map((t) => `'${t}'!A1:Y1`),
   });
   (res.data.valueRanges ?? []).forEach((r, i) => {
     const tab = CASE_TABS[i];
@@ -129,13 +130,25 @@ async function main() {
     } else {
       ok(`${tab} — all 19 columns present`);
     }
+    // Optional time-based verification columns — never a failure, just noise
+    // when a tab has some but not all of them.
+    const timeHave = CASE_TIME_HEADERS.filter((h) => header.includes(h));
+    if (timeHave.length && timeHave.length < CASE_TIME_HEADERS.length) {
+      warn(
+        `${tab} — partial time-verification columns; add: ${CASE_TIME_HEADERS.filter(
+          (h) => !header.includes(h)
+        ).join(', ')}`
+      );
+    } else if (timeHave.length === CASE_TIME_HEADERS.length) {
+      ok(`${tab} — time-based verification columns present`);
+    }
   });
 
   if (tabNames.includes(ISSUES_TAB)) {
     console.log('\n6b. Header row of the Issues tab');
     const issuesRes = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId!,
-      range: `'${ISSUES_TAB}'!A1:S1`,
+      range: `'${ISSUES_TAB}'!A1:Y1`,
     });
     const header = ((issuesRes.data.values?.[0] ?? []) as unknown[]).map((h) => String(h ?? '').trim());
     const missing = ISSUE_HEADERS.filter((h) => !header.includes(h));

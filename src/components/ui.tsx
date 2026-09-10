@@ -1,6 +1,7 @@
 'use client';
 
 import { STATUS_COLOR, STATUS_SOFT } from '@/lib/constants';
+import { TIME_STATE_META, type TimeVerification } from '@/lib/timeverify';
 
 export function StatusBadge({ status }: { status: string }) {
   const c = STATUS_COLOR[status] ?? 'var(--notrun)';
@@ -11,6 +12,22 @@ export function StatusBadge({ status }: { status: string }) {
     <span className="badge" style={{ color: c, background: bg }}>
       <i className="sw" style={{ background: c }} />
       {status}
+    </span>
+  );
+}
+
+/** Live countdown chip for a time-based case — the label is recomputed from
+ *  today's date every render, never stored. */
+export function TimeChip({ tv }: { tv: TimeVerification | null }) {
+  if (!tv) return <span style={{ color: 'var(--ink-3)' }}>—</span>;
+  const m = TIME_STATE_META[tv.state];
+  const title = tv.verifyBy
+    ? `${m.label} · verify by ${tv.verifyBy}${tv.periodLabel ? ` (${tv.periodLabel} after ${tv.triggerDate})` : ''}`
+    : m.label;
+  return (
+    <span className="badge" style={{ color: m.color, background: m.soft }} title={title}>
+      <i className="sw" style={{ background: m.color }} />
+      {tv.label}
     </span>
   );
 }

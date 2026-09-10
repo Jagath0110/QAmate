@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { PRIORITY_COLOR, PRIORITY_ORDER, STATUS_ORDER } from '@/lib/constants';
 import type { TestCaseDTO } from '@/lib/types';
-import { EmptyState, Pagination, SearchIcon, SortableHeaders, StatusBadge } from './ui';
+import { EmptyState, Pagination, SearchIcon, SortableHeaders, StatusBadge, TimeChip } from './ui';
 import { CaseDrawer } from './CaseDrawer';
 
 type ColKey =
@@ -15,6 +15,7 @@ type ColKey =
   | 'priority'
   | 'platform'
   | 'status'
+  | 'timeVerify'
   | 'tester'
   | 'executedAt';
 
@@ -26,8 +27,17 @@ const COLS: { k: ColKey; t: string }[] = [
   { k: 'priority', t: 'Priority' },
   { k: 'platform', t: 'Platform' },
   { k: 'status', t: 'Status' },
+  { k: 'timeVerify', t: 'Time verify' },
   { k: 'tester', t: 'Tester' },
   { k: 'executedAt', t: 'Executed' },
+];
+
+const TIME_STATE_OPTIONS: { v: string; t: string }[] = [
+  { v: 'any', t: 'Any time-based' },
+  { v: 'pending', t: 'Time-pending' },
+  { v: 'due', t: 'Verification due' },
+  { v: 'overdue', t: 'Verification overdue' },
+  { v: 'verified', t: 'Time-verified' },
 ];
 
 const FILTER_KEYS = [
@@ -40,6 +50,7 @@ const FILTER_KEYS = [
   'platform',
   'execution',
   'tester',
+  'timeState',
   'from',
   'to',
   'attention',
@@ -57,6 +68,7 @@ const EMPTY: Filters = {
   platform: '',
   execution: '',
   tester: '',
+  timeState: '',
   from: '',
   to: '',
   attention: '',
@@ -123,6 +135,15 @@ export function CaseTable({ cases }: { cases: TestCaseDTO[] }) {
       if (filters.platform && c.platform !== filters.platform) return false;
       if (filters.execution && c.execution !== filters.execution) return false;
       if (filters.tester && c.tester !== filters.tester) return false;
+      if (filters.timeState) {
+        const tv = c.timeVerification;
+        if (!tv) return false;
+        if (filters.timeState === 'verified') {
+          if (tv.state !== 'verified_pass' && tv.state !== 'verified_fail') return false;
+        } else if (filters.timeState !== 'any' && tv.state !== filters.timeState) {
+          return false;
+        }
+      }
       if (filters.attention && !['Fail', 'Blocked', 'Retest'].includes(c.status)) return false;
       if (filters.from && (!c.executedAt || c.executedAt < filters.from)) return false;
       if (filters.to && (!c.executedAt || c.executedAt > filters.to)) return false;
@@ -138,6 +159,9 @@ export function CaseTable({ cases }: { cases: TestCaseDTO[] }) {
           c.status,
           c.tester,
           c.defectId,
+          c.verifyAfter,
+          c.timeVerification?.label,
+          c.timeVerification?.verifyBy,
           c.steps,
           c.expected,
           c.actual,
@@ -167,6 +191,16 @@ export function CaseTable({ cases }: { cases: TestCaseDTO[] }) {
         const ai = STATUS_ORDER.indexOf(a.status);
         const bi = STATUS_ORDER.indexOf(b.status);
         return ((ai < 0 ? 9 : ai) - (bi < 0 ? 9 : bi)) * dir;
+      }
+      if (sortKey === 'timeVerify') {
+        // Soonest to act first (overdue, due, then ascending days-left);
+        // non-time-based cases always sort to the bottom.
+        const av = a.timeVerification?.daysLeft;
+        const bv = b.timeVerification?.daysLeft;
+        if (av == null && bv == null) return 0;
+        if (av == null) return 1;
+        if (bv == null) return -1;
+        return (av - bv) * dir;
       }
       const x = a[sortKey] ?? '';
       const y = b[sortKey] ?? '';
@@ -222,6 +256,19 @@ export function CaseTable({ cases }: { cases: TestCaseDTO[] }) {
             <option>Automated</option>
           </select>
           <Select label="Tester" value={filters.tester} options={facets.tester} onChange={(v) => set('tester', v)} />
+
+          <select
+            aria-label="Time-based verification"
+            value={filters.timeState}
+            onChange={(e) => set('timeState', e.target.value)}
+          >
+            <option value="">Time verify · all</option>
+            {TIME_STATE_OPTIONS.map((o) => (
+              <option key={o.v} value={o.v}>
+                {o.t}
+              </option>
+            ))}
+          </select>
 
           <input
             type="date"
@@ -289,6 +336,9 @@ export function CaseTable({ cases }: { cases: TestCaseDTO[] }) {
                     </td>
                     <td data-label="Status">
                       <StatusBadge status={c.status} />
+                    </td>
+                    <td data-label="Time verify">
+                      <TimeChip tv={c.timeVerification} />
                     </td>
                     <td className="idc" data-label="Tester">
                       {c.tester ?? '—'}

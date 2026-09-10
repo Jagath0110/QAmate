@@ -90,6 +90,18 @@ export const CASE_HEADERS = [
 ] as const;
 
 /**
+ * Optional columns the importer reads when they're present on a case tab. They
+ * drive the time-based verification tracker (a plan bought today that only
+ * expires in 30 days). Unlike CASE_HEADERS, a missing one of these never aborts
+ * the sync — the feature is simply off for tabs that don't have them.
+ */
+export const CASE_TIME_HEADERS = [
+  'Time Trigger Date',
+  'Verify After',
+  'Verify Result',
+] as const;
+
+/**
  * The header row of the Issues tab. Test Case IDs are NOT a column here —
  * they are derived from the case tabs' Defect ID column, same link the old
  * GitHub integration used, so QA never enters the same fact twice.

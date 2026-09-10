@@ -1,4 +1,5 @@
 import type { IssueStage } from './constants';
+import type { TimeVerification } from './timeverify';
 
 /** A test case as the UI consumes it — dates are ISO strings, not Date objects. */
 export interface TestCaseDTO {
@@ -25,6 +26,12 @@ export interface TestCaseDTO {
   sourceLabel: string | null;
   whyManual: string | null;
   execution: 'Manual' | 'Automated';
+  /** Raw time-based verification inputs from the sheet (ISO date / period text). */
+  timeTriggerAt: string | null;
+  verifyAfter: string | null;
+  verifyResult: string | null;
+  /** Everything derived from those plus today — null for a normal case. */
+  timeVerification: TimeVerification | null;
 }
 
 export interface IssueDTO {
@@ -95,6 +102,11 @@ export interface QaSummary {
   failurePct: number;
   automationPct: number;
   openRisk: number;
+  /** Time-based cases waiting on a real-world clock. */
+  timePending: number;
+  timeDue: number;
+  timeOverdue: number;
+  timeVerified: number;
   healthScore: number;
   healthBand: string;
   modules: ModuleHealth[];

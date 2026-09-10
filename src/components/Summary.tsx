@@ -97,6 +97,17 @@ export function KpiStrip({ s }: { s: QaSummary }) {
     ],
     ['Automation coverage', `${f1(s.automationPct)}%`, `${n(s.automatedCount)} automated scenarios`, 'var(--auto)'],
   ];
+
+  // Only surface the time-based row when such cases exist in the sheet.
+  const timeTotal = s.timePending + s.timeDue + s.timeOverdue + s.timeVerified;
+  if (timeTotal) {
+    cells.push([
+      'Time-based verification',
+      `${n(s.timePending + s.timeDue)} pending`,
+      `${n(s.timeDue)} due · ${n(s.timeOverdue)} overdue · ${n(s.timeVerified)} verified`,
+      s.timeOverdue ? 'var(--fail)' : s.timeDue ? 'var(--blocked)' : 'var(--retest)',
+    ]);
+  }
   return (
     <div className="panel kpis">
       {cells.map(([k, v, d, tone]) => (

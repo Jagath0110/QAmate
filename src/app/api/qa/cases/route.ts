@@ -28,6 +28,14 @@ export async function GET(req: NextRequest) {
     if (!eq(p.get('platform') ?? '', c.platform)) return false;
     if (!eq(p.get('execution') ?? '', c.execution)) return false;
     if (!eq(p.get('tester') ?? '', c.tester)) return false;
+    const timeState = p.get('timeState') ?? '';
+    if (timeState) {
+      const tv = c.timeVerification;
+      if (!tv) return false;
+      if (timeState === 'verified') {
+        if (tv.state !== 'verified_pass' && tv.state !== 'verified_fail') return false;
+      } else if (timeState !== 'any' && tv.state !== timeState) return false;
+    }
     if (p.get('attention') && !['Fail', 'Blocked', 'Retest'].includes(c.status)) return false;
     const from = p.get('from');
     const to = p.get('to');

@@ -10,6 +10,7 @@ import {
   STATUSES,
 } from './constants';
 import type { SyncWarning } from './types';
+import { parsePeriod } from './timeverify';
 
 export interface ParsedCase {
   testCaseId: string;
@@ -34,6 +35,10 @@ export interface ParsedCase {
   sourceLabel: string | null;
   whyManual: string | null;
   execution: 'Manual' | 'Automated';
+  /** Optional time-based verification inputs (see timeverify.ts). */
+  timeTriggerAt: Date | null;
+  verifyAfter: string | null;
+  verifyResult: 'Pass' | 'Fail' | null;
 }
 
 export interface SheetEnums {
@@ -189,6 +194,11 @@ export function parseCaseTab(
     comments: col('Comments'),
     source: col('Source'),
     why: col('Why manual'),
+    // Optional — col() returns -1 when absent and row[-1] is undefined, which
+    // clean()/parseDate() treat as empty. The feature is simply off then.
+    timeTrigger: col('Time Trigger Date'),
+    verifyAfter: col('Verify After'),
+    verifyResult: col('Verify Result'),
   };
 
   const out: ParsedCase[] = [];
@@ -321,6 +331,56 @@ export function parseCaseTab(
       });
     }
 
+    // Optional time-based verification inputs.
+    const timeTriggerAt = parseDate(row[idx.timeTrigger]);
+    const verifyAfter = clean(row[idx.verifyAfter]);
+    const verifyResultRaw = clean(row[idx.verifyResult]);
+    const verifyResult: 'Pass' | 'Fail' | null = verifyResultRaw
+      ? /^pass$/i.test(verifyResultRaw)
+        ? 'Pass'
+        : /^fail$/i.test(verifyResultRaw)
+          ? 'Fail'
+          : null
+      : null;
+
+    if (verifyResultRaw && !verifyResult) {
+      warnings.push({
+        rule: 'time-verify-bad-result',
+        tab,
+        row: rowNumber,
+        testCaseId,
+        message: `Verify Result "${verifyResultRaw}" should be Pass or Fail — it was ignored.`,
+      });
+    }
+    if (verifyAfter && !parsePeriod(verifyAfter)) {
+      warnings.push({
+        rule: 'time-verify-bad-period',
+        tab,
+        row: rowNumber,
+        testCaseId,
+        message: `Verify After "${verifyAfter}" is not a period like "30d", "2w", "3mo" or "1y".`,
+      });
+    }
+    if (verifyAfter && parsePeriod(verifyAfter) && !timeTriggerAt && !verifyResult) {
+      warnings.push({
+        rule: 'time-verify-incomplete',
+        tab,
+        row: rowNumber,
+        testCaseId,
+        message:
+          'Verify After is set but Time Trigger Date is empty — the verification date cannot be computed.',
+      });
+    }
+    if (timeTriggerAt && !verifyAfter && !verifyResult) {
+      warnings.push({
+        rule: 'time-verify-incomplete',
+        tab,
+        row: rowNumber,
+        testCaseId,
+        message: 'Time Trigger Date is set but Verify After (the wait period) is empty.',
+      });
+    }
+
     out.push({
       testCaseId,
       sheetTab: tab,
@@ -344,6 +404,9 @@ export function parseCaseTab(
       sourceLabel: clean(row[idx.source]),
       whyManual: clean(row[idx.why]),
       execution: 'Manual',
+      timeTriggerAt,
+      verifyAfter,
+      verifyResult,
     });
   }
 
@@ -394,6 +457,9 @@ export function parseAutomatedTab(grid: string[][]): ParsedCase[] {
       sourceLabel: 'Automation suite',
       whyManual: null,
       execution: 'Automated',
+      timeTriggerAt: null,
+      verifyAfter: null,
+      verifyResult: null,
     });
   }
   return out;
@@ -565,7 +631,9 @@ export async function readWorkbook(): Promise<SheetReadResult> {
 
   const res = await sheets.spreadsheets.values.batchGet({
     spreadsheetId: process.env.QA_SHEET_ID!,
-    ranges: tabs.map((t) => `'${t}'!A1:S2000`),
+    // A1:Y covers the 19 CASE_HEADERS plus room for the optional time-based
+    // verification columns (Time Trigger Date / Verify After / Verify Result).
+    ranges: tabs.map((t) => `'${t}'!A1:Y2000`),
     valueRenderOption: 'UNFORMATTED_VALUE',
     dateTimeRenderOption: 'FORMATTED_STRING',
   });
